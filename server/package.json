@@ -4,7 +4,8 @@
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "npm run dev",
+    "dev": "nodemon server.js"
   },
   "keywords": [],
   "author": "",
@@ -20,11 +21,11 @@
     "express": "^5.2.1",
     "googleapis": "^171.4.0",
     "helmet": "^8.1.0",
-    "ioredis": "^5.10.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.2.4",
     "morgan": "^1.10.1",
     "multer": "^2.1.1",
+    "redis": "^5.11.0",
     "twilio": "^5.12.2",
     "winston": "^3.19.0"
   },

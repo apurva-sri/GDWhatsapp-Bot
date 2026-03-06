@@ -1,12 +1,21 @@
 // Drive API routes
-const express = require("express");
-const driveController = require("../controllers/driveController");
+const router = require("express").Router();
+const {
+  listFiles,
+  searchFiles,
+  deleteFile,
+  shareFile,
+  getFileInfo,
+} = require("../controllers/driveController");
+const { protect } = require("../middlewares/authMiddleware");
+const tokenRefresher = require("../middlewares/tokenRefresher");
 
-const router = express.Router();
+router.use(protect, tokenRefresher);
 
-router.get("/files", driveController.listFiles);
-router.post("/upload", driveController.uploadFile);
-router.delete("/:fileId", driveController.deleteFile);
-router.get("/download/:fileId", driveController.downloadFile);
+router.get("/files", listFiles);
+router.get("/search", searchFiles);
+router.get("/files/:fileName/info", getFileInfo);
+router.delete("/files/:fileId", deleteFile);
+router.post("/files/:fileId/share", shareFile);
 
 module.exports = router;

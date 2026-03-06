@@ -56,7 +56,7 @@ app.use("/api/drive", require("./routes/driveRoutes"));
 app.use("/api/whatsapp", require("./routes/whatsappRoutes"));
 
 // ─── 404 Handler ───────────────────────────────────────────────
-app.use("*", (req, res) => {
+app.use((req, res) => {
   res
     .status(404)
     .json({ success: false, message: `Route ${req.originalUrl} not found` });
