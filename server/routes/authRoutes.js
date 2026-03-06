@@ -1,10 +1,15 @@
-// Authentication routes
-const express = require("express");
-const authController = require("../controllers/authController");
+const router = require("express").Router();
+const {
+  googleLogin,
+  googleCallback,
+  getMe,
+  logout,
+} = require("../controllers/authController");
+const { protect } = require("../middlewares/authMiddleware");
 
-const router = express.Router();
-
-router.get("/callback", authController.handleGoogleCallback);
-router.post("/logout", authController.logout);
+router.get("/google", googleLogin);
+router.get("/google/callback", googleCallback);
+router.get("/me", protect, getMe);
+router.post("/logout", protect, logout);
 
 module.exports = router;

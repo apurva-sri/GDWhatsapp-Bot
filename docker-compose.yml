@@ -1,38 +1,69 @@
-version: '3.8'
+version: "3.9"
 
+# Think of "services" as individual apps running in their own containers
 services:
+
+  # ─── MongoDB ──────────────────────────────────────────────────
+  # Our main database — stores users, tokens, file metadata, logs
   mongodb:
-    image: mongo:5.0
-    container_name: drivebot-mongodb
-    ports:
-      - '27017:27017'
+    image: mongo:7.0                      # Use official MongoDB v7 image
+    container_name: drivebot_mongo        # Name we use to refer to this container
+    restart: unless-stopped               # Auto-restart if it crashes
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_ROOT_USERNAME: admin   # Admin username (change in production)
+      MONGO_INITDB_ROOT_PASSWORD: secret123  # Admin password (change in production)
+      MONGO_INITDB_DATABASE: drivebot     # Auto-create this database on startup
+    ports:
+      - "27017:27017"   # host:container — lets you access MongoDB from your machine
     volumes:
-      - mongodb_data:/data/db
+      - mongo_data:/data/db              # Persist data even if container restarts
+    networks:
+      - drivebot_network
 
+  # ─── Redis ────────────────────────────────────────────────────
+  # Fast in-memory store — for sessions, caching tokens, rate limiting
   redis:
-    image: redis:7-alpine
-    container_name: drivebot-redis
+    image: redis:7.2-alpine               # Lightweight Redis v7 image
+    container_name: drivebot_redis
+    restart: unless-stopped
+    command: redis-server --requirepass redis123  # Password protect Redis
     ports:
-      - '6379:6379'
+      - "6379:6379"
     volumes:
-      - redis_data:/data
+      - redis_data:/data                 # Persist data on disk periodically
+    networks:
+      - drivebot_network
 
+  # ─── RabbitMQ ─────────────────────────────────────────────────
+  # Message queue — handles heavy tasks like file uploads asynchronously
+  # Without this: WhatsApp would timeout waiting for large uploads
+  # With this: We say "job received" instantly, then process in background
   rabbitmq:
-    image: rabbitmq:3.11-management-alpine
-    container_name: drivebot-rabbitmq
-    ports:
-      - '5672:5672'
-      - '15672:15672'
+    image: rabbitmq:3.13-management      # Includes web UI at port 15672
+    container_name: drivebot_rabbitmq
+    restart: unless-stopped
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: rabbit123
+    ports:
+      - "5672:5672"     # App connects here (AMQP protocol)
+      - "15672:15672"   # Web UI — visit http://localhost:15672 to see queues
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - drivebot_network
 
+# ─── Named Volumes ────────────────────────────────────────────
+# These are like USB drives that store data outside the containers
+# So even if you delete/restart a container, data stays safe
 volumes:
-  mongodb_data:
+  mongo_data:
   redis_data:
   rabbitmq_data:
+
+# ─── Network ──────────────────────────────────────────────────
+# All containers share this private network so they can talk to each other
+# e.g., your Node app calls "mongodb:27017" instead of "localhost:27017"
+networks:
+  drivebot_network:
+    driver: bridge
