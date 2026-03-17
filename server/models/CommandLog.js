@@ -1,20 +1,6 @@
 // Command audit log schema
 const mongoose = require("mongoose");
 
-/**
- * CommandLog Model — Full Audit Trail
- *
- * What was missing in v1:
- * ─────────────────────────────────────────────────────────────
- * ❌ No index on createdAt (admin dashboard sorts by date — needs index)
- * ❌ No compound index for userId + createdAt (most common query pattern)
- * ❌ No mediaUrl field (for file upload commands, we need the Twilio media URL)
- * ❌ No ipAddress / userAgent (useful for abuse detection)
- * ❌ No retryCount (if a Drive API call fails and retries, we track it)
- * ❌ No driveFileId (link log entry to the actual file that was acted on)
- * ❌ No static helper methods (controllers repeat the same log creation logic)
- * ❌ TTL missing — logs accumulate forever, wasting DB space
- */
 
 const commandLogSchema = new mongoose.Schema(
   {

@@ -1,22 +1,34 @@
-// Fix Issue 3 — App.jsx now has proper routing including /onboarding
-// which authController redirects to after Google OAuth success
+import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Login from "./pages/Login";
-import Onboarding from "./pages/Onboarding";
+import { AuthProvider } from "./context/authContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+import LandingPage from "./pages/LandingPage";
+import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
+import OnboardingPage from "./pages/OnboardingPage";
+import DashboardPage from "./pages/DashboardPage";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        {/* Landing page — shows Google Sign-In button */}
-        <Route path="/" element={<Login />} />
-
-        {/* Post-OAuth page — backend redirects here with ?token=...&name=...&whatsapp=... */}
-        <Route path="/onboarding" element={<Onboarding />} />
-
-        {/* Catch-all — redirect unknown routes to login */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
