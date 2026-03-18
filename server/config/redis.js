@@ -1,19 +1,6 @@
 const { createClient } = require("redis");
 const logger = require("../utils/logger");
 
-/**
- * Redis Client — using the official 'redis' npm package (v4+)
- *
- * Switched from ioredis to redis because:
- * - redis is the official client maintained by Redis Ltd
- * - Already installed in most Node environments
- * - Same API for our use case
- *
- * NOTE: redis v4 uses async/await and requires explicit .connect()
- * unlike ioredis which connects automatically.
- *
- * Install: npm install redis
- */
 
 let redisClient = null;
 

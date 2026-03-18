@@ -146,8 +146,8 @@ export default function OnboardingPage() {
                   {typeof s.desc === "function"
                     ? s.desc(
                         userData?.whatsapp ||
-                          process.env.REACT_APP_TWILIO_NUMBER ||
-                          "+1 (415) 523-8886",
+                          import.meta.env.VITE_TWILIO_NUMBER ||
+                          "+14155238886",
                       )
                     : s.desc}
                 </div>

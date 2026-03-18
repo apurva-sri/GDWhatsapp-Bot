@@ -101,15 +101,13 @@ const googleCallback = async (req, res) => {
     );
 
     // ── Assign WhatsApp number if new user ────────────────────
-    // For now we use the Twilio sandbox number
-    // Later when you buy more Twilio numbers, assign unique ones per user
-    if (!user.whatsappNumber) {
-      // Store the USER's WhatsApp number (their personal number)
-      // They'll message YOUR Twilio number, and we identify them by their number
-      user.whatsappNumber = `whatsapp:${profile.email}`; // placeholder, updated when they first message
-      user.twilioNumber = process.env.TWILIO_WHATSAPP_NUMBER;
-      await user.save();
-    }
+    if (!user.twilioNumber) {
+  await User.findByIdAndUpdate(user._id, {
+    twilioNumber: process.env.TWILIO_WHATSAPP_NUMBER,
+    lastActiveAt: new Date(),
+  });
+  user.twilioNumber = process.env.TWILIO_WHATSAPP_NUMBER;
+}
 
     // ── Create JWT for your app ────────────────────────────────
     // This JWT is what the React frontend uses to authenticate API calls
