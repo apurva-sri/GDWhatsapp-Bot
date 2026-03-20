@@ -157,21 +157,21 @@ userSchema.methods.isTokenExpired = function () {
  * @param {"totalUploads"|"totalDeletes"} type - specific stat to bump (optional)
  */
 userSchema.methods.incrementStat = async function (type = null) {
-  this.stats.totalCommands += 1;
-  this.stats.lastCommandAt = new Date();
-  if (type && this.stats[type] !== undefined) {
-    this.stats[type] += 1;
-  }
-  return this.save();
+  return User.findByIdAndUpdate(this._id, {
+    $inc: {
+      "stats.totalCommands": 1,
+      ...(type && { [`stats.${type}`]: 1 }),
+    },
+    "stats.lastCommandAt": new Date(),
+    lastActiveAt: new Date(),
+  });
 };
 
-/**
- * Flag this user as needing re-authentication.
- * Called by tokenService when Google refresh token fails.
- */
 userSchema.methods.flagReAuth = async function () {
-  this.requiresReAuth = true;
-  return this.save();
+  return User.findByIdAndUpdate(this._id, {
+    requiresReAuth: true,
+    lastActiveAt: new Date(),
+  });
 };
 
 // ─── Static Methods ───────────────────────────────────────────────
