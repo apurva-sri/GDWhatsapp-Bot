@@ -69,9 +69,11 @@ const handleIncoming = async (req, res) => {
 
     // ── Link WhatsApp number on first message ───────────────
     if (!user.whatsappNumber || user.whatsappNumber !== from) {
-      user.whatsappNumber = from;
-      user.whatsappLinkedAt = user.whatsappLinkedAt || new Date();
-      await user.save();
+      await User.findByIdAndUpdate(user._id, {
+        whatsappNumber: from,
+        whatsappLinkedAt: user.whatsappLinkedAt || new Date(),
+      });
+      user.whatsappNumber = from; // update in-memory too
     }
 
     // ── Load session ─────────────────────────────────────────

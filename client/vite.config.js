@@ -10,13 +10,11 @@ export default defineConfig({
         target: "http://localhost:5000",
         changeOrigin: true,
         secure: false,
-        configure: (proxy) => {
-          proxy.on("error", (err) => console.log("[proxy error]", err.message));
-          proxy.on("proxyReq", (_, req) =>
-            console.log("[proxy →]", req.method, req.url),
-          );
-        },
       },
     },
+  },
+  build: {
+    outDir: "dist",
+    sourcemap: false,
   },
 });
