@@ -91,6 +91,7 @@ const googleCallback = async (req, res) => {
           refreshToken: encryptedRefreshToken,
           tokenExpiry: new Date(expiry_date),
         },
+        requiresReAuth: false, // Reset re-auth flag on every successful login
         lastActiveAt: new Date(),
       },
       {
@@ -108,6 +109,9 @@ const googleCallback = async (req, res) => {
   });
   user.twilioNumber = process.env.TWILIO_WHATSAPP_NUMBER;
 }
+
+    // Clear stale Redis token cache so fresh tokens are used immediately
+    await clearTokenCache(user._id.toString());
 
     // ── Create JWT for your app ────────────────────────────────
     // This JWT is what the React frontend uses to authenticate API calls
@@ -166,6 +170,7 @@ const logout = async (req, res) => {
   try {
     const { deleteCache } = require("../config/redis");
     await deleteCache(`tokens:${req.user._id}`);
+    logger.info(`✅ User logged out: ${req.user.email}`);
     return successResponse(res, "Logged out successfully");
   } catch (error) {
     return errorResponse(res, "Logout failed", 500);
