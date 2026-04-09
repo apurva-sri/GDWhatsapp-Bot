@@ -1,7 +1,7 @@
 const User = require("../models/User");
 const { getAuthenticatedClient } = require("../config/google");
 const { encrypt, decrypt } = require("../utils/encrypt");
-const { setCache, getCache } = require("../config/redis");
+const { setCache, getCache, deleteCache } = require("../config/redis");
 const logger = require("../utils/logger");
 
 /**
@@ -124,4 +124,13 @@ const getUserTokens = async (userId) => {
   };
 };
 
-module.exports = { getValidAccessToken, getUserTokens };
+const clearTokenCache = async (userId) => {
+  try {
+    await deleteCache(`tokens:${userId}`);
+    logger.info(`🧹 Token cache cleared for user ${userId}`);
+  } catch (err) {
+    logger.warn(`Failed to clear token cache: ${err.message}`);
+  }
+};
+
+module.exports = { getValidAccessToken, getUserTokens, clearTokenCache };
