@@ -1,19 +1,5 @@
 const mongoose = require("mongoose");
 
-/**
- * User Model
- *
- * What was missing in v1:
- * ─────────────────────────────────────────────────────────────
- * ❌ No index on whatsappNumber (called on EVERY WhatsApp message — must be indexed)
- * ❌ No email index (queried frequently)
- * ❌ No token scope tracking (we don't know what permissions were granted)
- * ❌ No re-auth flag (if refresh token dies, we need to know)
- * ❌ No usage stats (total commands run, last command at)
- * ❌ No pre-save hook to update lastActiveAt automatically
- * ❌ No toJSON cleanup (tokens leak into API responses)
- * ❌ isTokenExpired() doesn't guard against missing tokenExpiry
- */
 
 const userSchema = new mongoose.Schema(
   {

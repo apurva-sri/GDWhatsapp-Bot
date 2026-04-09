@@ -35,7 +35,7 @@ const getAuthUrl = () => {
   const oauth2Client = createOAuth2Client();
 
   const scopes = [
-    "https://www.googleapis.com/auth/drive.file", // Access Drive
+    "https://www.googleapis.com/auth/drive",
     "https://www.googleapis.com/auth/userinfo.email",
     "https://www.googleapis.com/auth/userinfo.profile",
   ];

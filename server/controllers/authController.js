@@ -56,7 +56,7 @@ const googleCallback = async (req, res) => {
     // refresh_token → valid forever (until revoked), used to get new access tokens
     // expiry_date   → timestamp when access_token expires
     const tokens = await getTokensFromCode(code);
-    const { access_token, refresh_token, expiry_date } = tokens;
+    const { access_token, refresh_token, expiry_date, scope } = tokens;
 
     if (!refresh_token) {
       // This happens if the user already authorized before and we didn't force consent
@@ -90,6 +90,7 @@ const googleCallback = async (req, res) => {
           accessToken: encryptedAccessToken,
           refreshToken: encryptedRefreshToken,
           tokenExpiry: new Date(expiry_date),
+          scopes: scope ? scope.split(" ") : [],
         },
         requiresReAuth: false, // Reset re-auth flag on every successful login
         lastActiveAt: new Date(),

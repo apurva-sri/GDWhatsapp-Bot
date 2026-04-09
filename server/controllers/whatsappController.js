@@ -20,8 +20,6 @@ const driveService = require("../services/googleDriveService");
 const { queueFileUpload } = require("../queues/driveQueue");
 const logger = require("../utils/logger");
 
-
-
 const handleIncoming = async (req, res) => {
   // Respond 200 immediately — Twilio times out after 5s
   res.status(200).send("OK");
@@ -124,6 +122,7 @@ const handleIncoming = async (req, res) => {
         mediaMimeType,
         from,
         log,
+        messageSid,
       );
       await log.complete(
         log.responseMessage,
@@ -170,6 +169,7 @@ const executeCommand = async (
   mediaMimeType,
   from,
   log,
+  messageSid,
 ) => {
   const { command, params, error: parseError } = parsed;
 
