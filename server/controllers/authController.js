@@ -12,7 +12,7 @@ const {
   errorResponse,
 } = require("../utils/responseFormatter");
 const logger = require("../utils/logger");
-
+const { clearTokenCache } = require("../services/tokenService");
 /**
  * STEP 1 — Redirect user to Google's consent screen
  *

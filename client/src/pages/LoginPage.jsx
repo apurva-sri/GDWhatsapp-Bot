@@ -9,7 +9,12 @@ export default function LoginPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (isAuthenticated) navigate("/dashboard", { replace: true });
+    const params = new URLSearchParams(window.location.search);
+    const hasOAuthParams = params.get("token");
+
+    if (isAuthenticated && !hasOAuthParams) {
+      navigate("/dashboard", { replace: true });
+    }
   }, [isAuthenticated, navigate]);
 
   return (
