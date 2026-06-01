@@ -8,6 +8,9 @@ const logger = require("./utils/logger");
 
 const app = express();
 
+// Enable trust proxy to correctly resolve public protocol/host when behind ngrok or a reverse proxy
+app.set("trust proxy", true);
+
 // ─── Security Middlewares ──────────────────────────────────────
 
 /**

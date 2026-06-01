@@ -109,7 +109,15 @@ const handleIncoming = async (req, res) => {
     await log.save();
     logger.info(`📝 CommandLog saved: ${log._id}`);
 
-    const hostUrl = req.protocol + "://" + req.get("host");
+    // Use SERVER_URL env var (same one used by twilioValidator) for reliable public URL.
+    // Deriving from request headers (x-forwarded-proto/host) was unreliable on Render,
+    // causing Twilio to fail when fetching the mediaUrl.
+    const hostUrl = (process.env.SERVER_URL || "").replace(/\/+$/, "");
+    if (!hostUrl) {
+      logger.error("❌ SERVER_URL is not set in .env — file downloads will fail!");
+    }
+    logger.info(`🌐 Using SERVER_URL for media: ${hostUrl}`);
+    
     const startTime = Date.now();
 
     try {
@@ -230,13 +238,20 @@ const executeCommand = async (
 
         await sendMessage(from, `📥 Fetching and sending *${file.name}*...`);
         const mediaUrl = `${hostUrl}/api/drive/download/${user._id}/${file.id}/${encodeURIComponent(file.name)}`;
-        await sendMediaMessage(
-          from,
-          `Here is your file: *${file.name}*`,
-          mediaUrl
-        );
-
-        log.responseMessage = listMsg + `\nSent file: ${file.name}`;
+        logger.info(`📤 SEARCH: Sending media to ${from} | URL: ${mediaUrl}`);
+        try {
+          await sendMediaMessage(
+            from,
+            `Here is your file: *${file.name}*`,
+            mediaUrl
+          );
+          log.responseMessage = listMsg + `\nSent file: ${file.name}`;
+        } catch (mediaErr) {
+          logger.error(`❌ SEARCH media send failed: ${mediaErr.message} | URL: ${mediaUrl}`);
+          const fallbackMsg = `⚠️ Couldn't send the file directly. Here's the link:\n\n🔗 ${file.webViewLink || "Not available"}\n\n_You can also try: get ${file.name}_`;
+          await sendMessage(from, fallbackMsg);
+          log.responseMessage = listMsg + `\n` + fallbackMsg;
+        }
         log.driveFileId = file.id;
       } else {
         const msg = formatFileList(files);
@@ -381,16 +396,21 @@ const executeCommand = async (
       await sendMessage(from, `📥 Fetching and sending *${file.name}*...`);
 
       const mediaUrl = `${hostUrl}/api/drive/download/${user._id}/${file.id}/${encodeURIComponent(file.name)}`;
-      logger.info(`📤 Sending WhatsApp media message to ${from} with URL: ${mediaUrl}`);
+      logger.info(`📤 GET: Sending WhatsApp media to ${from} | URL: ${mediaUrl}`);
       
-      await sendMediaMessage(
-        from,
-        `Here is your file: *${file.name}*`,
-        mediaUrl
-      );
-      
-      const responseMsg = `Sent file: ${file.name}`;
-      log.responseMessage = responseMsg;
+      try {
+        await sendMediaMessage(
+          from,
+          `Here is your file: *${file.name}*`,
+          mediaUrl
+        );
+        log.responseMessage = `Sent file: ${file.name}`;
+      } catch (mediaErr) {
+        logger.error(`❌ GET media send failed: ${mediaErr.message} | URL: ${mediaUrl}`);
+        const fallbackMsg = `⚠️ Couldn't send the file directly. Here's the link:\n\n🔗 ${file.webViewLink || "Not available"}`;
+        await sendMessage(from, fallbackMsg);
+        log.responseMessage = fallbackMsg;
+      }
       log.driveFileId = file.id;
       break;
     }
