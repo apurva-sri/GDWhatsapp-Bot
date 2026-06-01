@@ -137,4 +137,43 @@ const shareFile = asyncHandler(async (req, res) => {
   return successResponse(res, `File shared with ${email} as ${role}`);
 });
 
-module.exports = { listFiles, searchFiles, getFileInfo, deleteFile, shareFile };
+// ─── Public Download (for Twilio/WhatsApp) ──────────────────────────
+const downloadFilePublic = asyncHandler(async (req, res) => {
+  const { userId, fileId } = req.params;
+  if (!userId || !fileId) {
+    return res.status(400).send("Bad Request: Missing userId or fileId");
+  }
+
+  try {
+    logger.info(`📥 Starting public download: User=${userId} | File=${fileId}`);
+    const { stream, name, mimeType } = await driveService.downloadFile(userId, fileId);
+
+    // Set headers for download / content viewing
+    res.setHeader("Content-Type", mimeType);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(name)}"`
+    );
+
+    stream.on("error", (err) => {
+      logger.error(`Error streaming file ${fileId} for user ${userId}: ${err.message}`);
+      if (!res.headersSent) {
+        res.status(500).send("Error streaming file");
+      }
+    });
+
+    stream.pipe(res);
+  } catch (error) {
+    logger.error(`Public download failed for user ${userId}, fileId ${fileId}: ${error.message}`);
+    res.status(500).send("Failed to download file");
+  }
+});
+
+module.exports = {
+  listFiles,
+  searchFiles,
+  getFileInfo,
+  deleteFile,
+  shareFile,
+  downloadFilePublic,
+};

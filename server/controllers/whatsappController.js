@@ -14,7 +14,7 @@ const {
   resetSession,
   SESSION_STATES,
 } = require("../services/sessionService");
-const { sendMessage, MESSAGES } = require("../services/twilioService");
+const { sendMessage, sendMediaMessage, MESSAGES } = require("../services/twilioService");
 const { whatsappRateLimiter } = require("../middlewares/rateLimiter");
 const driveService = require("../services/googleDriveService");
 const { queueFileUpload } = require("../queues/driveQueue");
@@ -109,6 +109,7 @@ const handleIncoming = async (req, res) => {
     await log.save();
     logger.info(`📝 CommandLog saved: ${log._id}`);
 
+    const hostUrl = req.protocol + "://" + req.get("host");
     const startTime = Date.now();
 
     try {
@@ -123,6 +124,7 @@ const handleIncoming = async (req, res) => {
         from,
         log,
         messageSid,
+        hostUrl,
       );
       await log.complete(
         log.responseMessage,
@@ -170,6 +172,7 @@ const executeCommand = async (
   from,
   log,
   messageSid,
+  hostUrl,
 ) => {
   const { command, params, error: parseError } = parsed;
 
@@ -205,12 +208,41 @@ const executeCommand = async (
       );
       await sendMessage(from, `🔍 Searching for "*${params.query}*"...`);
       const files = await driveService.searchFiles(user._id, params.query);
-      const msg =
-        files.length > 0
-          ? formatFileList(files)
-          : `❌ No files found matching "*${params.query}*".\n\nTry *list* to see all files.`;
-      await sendMessage(from, msg);
-      log.responseMessage = msg;
+      
+      if (files.length === 0) {
+        const msg = `❌ No files found matching "*${params.query}*".\n\nTry *list* to see all files.`;
+        await sendMessage(from, msg);
+        log.responseMessage = msg;
+      } else if (files.length === 1) {
+        const file = files[0];
+        const listMsg = formatFileList(files);
+        await sendMessage(from, listMsg);
+
+        // Check size limit: 100MB
+        const maxWhatsAppSize = 100 * 1024 * 1024;
+        if (file.size && parseInt(file.size) > maxWhatsAppSize) {
+          const msg = `⚠️ File *${file.name}* is too large to send via WhatsApp (${formatFileSize(parseInt(file.size))}). The limit is 100MB.\n\nHere is the link: ${file.webViewLink}`;
+          await sendMessage(from, msg);
+          log.responseMessage = listMsg + "\n" + msg;
+          log.driveFileId = file.id;
+          break;
+        }
+
+        await sendMessage(from, `📥 Fetching and sending *${file.name}*...`);
+        const mediaUrl = `${hostUrl}/api/drive/download/${user._id}/${file.id}/${encodeURIComponent(file.name)}`;
+        await sendMediaMessage(
+          from,
+          `Here is your file: *${file.name}*`,
+          mediaUrl
+        );
+
+        log.responseMessage = listMsg + `\nSent file: ${file.name}`;
+        log.driveFileId = file.id;
+      } else {
+        const msg = formatFileList(files);
+        await sendMessage(from, msg);
+        log.responseMessage = msg;
+      }
       break;
     }
 
@@ -319,6 +351,46 @@ const executeCommand = async (
         `🔗 Link: ${file.webViewLink || "Not available"}`;
       await sendMessage(from, msg);
       log.responseMessage = msg;
+      log.driveFileId = file.id;
+      break;
+    }
+
+    case COMMANDS.GET: {
+      logger.debug(
+        `📥 GET command requested by: ${user._id} | FileName: ${params.fileName}`,
+      );
+      await sendMessage(from, `⏳ Looking up *${params.fileName}*...`);
+      const file = await driveService.getFileInfo(user._id, params.fileName);
+      if (!file) {
+        const msg = MESSAGES.FILE_NOT_FOUND(params.fileName);
+        await sendMessage(from, msg);
+        log.responseMessage = msg;
+        break;
+      }
+
+      // Check Twilio file size limit: 100MB
+      const maxWhatsAppSize = 100 * 1024 * 1024;
+      if (file.size && parseInt(file.size) > maxWhatsAppSize) {
+        const msg = `⚠️ File *${file.name}* is too large to send via WhatsApp (${formatFileSize(parseInt(file.size))}). The limit is 100MB.\n\nHere is the link: ${file.webViewLink}`;
+        await sendMessage(from, msg);
+        log.responseMessage = msg;
+        log.driveFileId = file.id;
+        break;
+      }
+
+      await sendMessage(from, `📥 Fetching and sending *${file.name}*...`);
+
+      const mediaUrl = `${hostUrl}/api/drive/download/${user._id}/${file.id}/${encodeURIComponent(file.name)}`;
+      logger.info(`📤 Sending WhatsApp media message to ${from} with URL: ${mediaUrl}`);
+      
+      await sendMediaMessage(
+        from,
+        `Here is your file: *${file.name}*`,
+        mediaUrl
+      );
+      
+      const responseMsg = `Sent file: ${file.name}`;
+      log.responseMessage = responseMsg;
       log.driveFileId = file.id;
       break;
     }

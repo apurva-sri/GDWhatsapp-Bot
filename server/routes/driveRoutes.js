@@ -6,9 +6,14 @@ const {
   deleteFile,
   shareFile,
   getFileInfo,
+  downloadFilePublic,
 } = require("../controllers/driveController");
 const { protect } = require("../middlewares/authMiddleware");
 const tokenRefresher = require("../middlewares/tokenRefresher");
+
+// Public routes for Twilio/WhatsApp file downloads (handles requests with and without filename suffix)
+router.get("/download/:userId/:fileId", downloadFilePublic);
+router.get("/download/:userId/:fileId/:fileName", downloadFilePublic);
 
 router.use(protect, tokenRefresher);
 

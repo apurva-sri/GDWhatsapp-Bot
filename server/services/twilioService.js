@@ -82,6 +82,7 @@ const MESSAGES = {
     `📋 *DriveBot Commands*\n\n` +
     `📂 *list* — Show recent files\n` +
     `🔍 *search <name>* — Search files\n` +
+    `📥 *get <filename>* — Get/Download file\n` +
     `⬆️ *upload* — Upload a file\n` +
     `🗑️ *delete <filename>* — Delete a file\n` +
     `🔗 *share <filename> <email>* — Share a file\n` +

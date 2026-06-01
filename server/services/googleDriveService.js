@@ -5,32 +5,10 @@ const FileMetadata = require("../models/FileMetadata");
 const logger = require("../utils/logger");
 const axios = require("axios");
 
-/**
- * Google Drive Service
- *
- * Fix Issue 5: Token refresh flow was inconsistent.
- * - tokenRefresher middleware sets req.accessToken (for REST API routes)
- * - WhatsApp controller calls Drive directly (no req object)
- *
- * Solution: getDriveClient() accepts an optional pre-fetched accessToken.
- * - REST API routes: pass req.accessToken (already refreshed by middleware)
- * - WhatsApp controller: pass nothing → service fetches+refreshes itself
- *
- * This means tokens are NEVER fetched twice for the same request.
- */
-
-/**
- * Build an authenticated Google Drive client.
- *
- * @param {string} userId          - MongoDB User._id
- * @param {string} [accessToken]   - Pre-fetched token (from tokenRefresher middleware).
- *                                   If omitted, fetched + refreshed automatically.
- */
 const getDriveClient = async (userId, accessToken = null) => {
   let token = accessToken;
 
   if (!token) {
-    // No pre-fetched token — fetch and auto-refresh if needed
     token = await getValidAccessToken(userId);
   }
 
@@ -234,6 +212,78 @@ const shareFile = async (
   }
 };
 
+// ─── DOWNLOAD FILE ────────────────────────────────────────────────
+/**
+ * Download a file from Google Drive (or export it if it is Google-native).
+ * @param {string} userId
+ * @param {string} fileId
+ * @param {string} [accessToken]
+ * @returns {Promise<{ stream: Stream, name: string, mimeType: string }>}
+ */
+const downloadFile = async (userId, fileId, accessToken = null) => {
+  try {
+    const drive = await getDriveClient(userId, accessToken);
+
+    // 1. Get file metadata (name & mimeType)
+    const fileMeta = await drive.files.get({
+      fileId,
+      fields: "name, mimeType",
+    });
+
+    const { name, mimeType } = fileMeta.data;
+    let stream;
+    let finalMimeType = mimeType;
+    let finalName = name;
+
+    // 2. Check if it's a Google-native document
+    if (mimeType.startsWith("application/vnd.google-apps.")) {
+      // Map Google-native to standard export mime types
+      if (mimeType === "application/vnd.google-apps.document") {
+        finalMimeType = "application/pdf";
+        if (!finalName.toLowerCase().endsWith(".pdf")) {
+          finalName += ".pdf";
+        }
+      } else if (mimeType === "application/vnd.google-apps.spreadsheet") {
+        finalMimeType = "application/pdf";
+        if (!finalName.toLowerCase().endsWith(".pdf")) {
+          finalName += ".pdf";
+        }
+      } else if (mimeType === "application/vnd.google-apps.presentation") {
+        finalMimeType = "application/pdf";
+        if (!finalName.toLowerCase().endsWith(".pdf")) {
+          finalName += ".pdf";
+        }
+      } else {
+        // Fallback for other Google Apps types (drawings, etc.)
+        finalMimeType = "application/pdf";
+        if (!finalName.toLowerCase().endsWith(".pdf")) {
+          finalName += ".pdf";
+        }
+      }
+
+      // Export the file
+      const response = await drive.files.export(
+        { fileId, mimeType: finalMimeType },
+        { responseType: "stream" }
+      );
+      stream = response.data;
+    } else {
+      // Regular binary file (PDF, DOCX, XLSX, images, etc.)
+      const response = await drive.files.get(
+        { fileId, alt: "media" },
+        { responseType: "stream" }
+      );
+      stream = response.data;
+    }
+
+    logger.logDriveOp(userId, "DOWNLOAD", `${fileId} (${finalName})`);
+    return { stream, name: finalName, mimeType: finalMimeType };
+  } catch (error) {
+    logger.error(`downloadFile error for ${userId} on ${fileId}: ${error.message}`);
+    throw error;
+  }
+};
+
 module.exports = {
   listFiles,
   searchFiles,
@@ -241,4 +291,5 @@ module.exports = {
   deleteFile,
   uploadFile,
   shareFile,
+  downloadFile,
 };

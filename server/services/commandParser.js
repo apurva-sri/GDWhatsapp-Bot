@@ -34,6 +34,7 @@ const COMMANDS = {
   SHARE:  "share",
   INFO:   "info",
   HELP:   "help",
+  GET:    "get",
   UNKNOWN: "unknown",
 };
 
@@ -164,6 +165,20 @@ const parseCommand = (rawText) => {
       };
     }
     return { command: COMMANDS.INFO, params: { fileName: rest }, raw: text };
+  }
+
+  // ── get/download <filename> ───────────────────────────────────
+  // "get report.pdf" → params.fileName = "report.pdf"
+  if (keyword === "get" || keyword === "download" || keyword === "fetch") {
+    if (!rest) {
+      return {
+        command: COMMANDS.GET,
+        params: {},
+        raw: text,
+        error: "Please provide a filename. Example: get report.pdf",
+      };
+    }
+    return { command: COMMANDS.GET, params: { fileName: rest }, raw: text };
   }
 
   // ── Unknown command ───────────────────────────────────────────

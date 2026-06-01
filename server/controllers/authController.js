@@ -23,7 +23,6 @@ const { clearTokenCache } = require("../services/tokenService");
 const googleLogin = (req, res) => {
   try {
     const authUrl = getAuthUrl();
-    // 302 redirect — browser goes to Google
     res.redirect(authUrl);
   } catch (error) {
     logger.error(`googleLogin error: ${error.message}`);
