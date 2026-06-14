@@ -24,7 +24,7 @@ const getProfile = async (req, res, next) => {
     logger.info(`👤 Fetching user profile: UserId=${req.user._id}`);
     // req.user is already attached by authMiddleware
     // Re-fetch to get latest data (stats may have updated)
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user._id).select("-tokens -__v");
     if (!user) {
       logger.warn(`⚠️ User not found: UserId=${req.user._id}`);
       return errorResponse(res, "User not found", 404);
@@ -81,7 +81,8 @@ const getStats = async (req, res, next) => {
  */
 const getHistory = async (req, res, next) => {
   try {
-    const limit = parseInt(req.query.limit) || 20;
+    // Cap limit at 100 to prevent Denial of Service via large query parameters
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
     logger.info(
       `📃 Fetching command history: UserId=${req.user._id} | Limit=${limit}`,
     );

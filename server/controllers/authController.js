@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const User = require("../models/User");
 const {
   getAuthUrl,
@@ -13,6 +14,34 @@ const {
 } = require("../utils/responseFormatter");
 const logger = require("../utils/logger");
 const { clearTokenCache } = require("../services/tokenService");
+const { setCache } = require("../config/redis");
+
+// ── JWT helper ───────────────────────────────────────────────
+/**
+ * Issue a JWT for the user with a unique jti (JWT ID).
+ * The jti allows us to revoke individual tokens at logout via a Redis blocklist.
+ * Algorithm is pinned to HS256 (same algo enforced in authMiddleware).
+ */
+const signJWT = (user) => {
+  const jti = crypto.randomUUID(); // unique per token — used by blocklist
+  const token = jwt.sign(
+    { userId: user._id, email: user.email, jti },
+    process.env.JWT_SECRET,
+    {
+      algorithm: "HS256",
+      expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    },
+  );
+  return { token, jti };
+};
+
+// Cookie security settings
+const COOKIE_OPTIONS = {
+  httpOnly: true,  // JS cannot read this cookie (blocks XSS token theft)
+  secure: process.env.NODE_ENV === "production", // HTTPS only in prod
+  sameSite: "strict",                          // CSRF protection
+  maxAge: 7 * 24 * 60 * 60 * 1000,            // 7 days in ms
+};
 /**
  * STEP 1 — Redirect user to Google's consent screen
  *
@@ -22,7 +51,21 @@ const { clearTokenCache } = require("../services/tokenService");
  */
 const googleLogin = (req, res) => {
   try {
-    const authUrl = getAuthUrl();
+    // Generate a cryptographically random state value to defend against CSRF.
+    // An attacker cannot forge a valid login flow because they cannot predict
+    // the state value that the server expects back from Google.
+    const state = crypto.randomBytes(32).toString("hex");
+
+    // Store the state in a short-lived, httpOnly cookie so the callback can
+    // verify it. Do NOT store it in session / Redis to keep the server stateless.
+    res.cookie("oauth_state", state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax", // lax because the Google redirect will cross origins
+      maxAge: 10 * 60 * 1000, // 10 minutes — OAuth must complete within this
+    });
+
+    const authUrl = getAuthUrl(state); // pass state into the OAuth URL
     res.redirect(authUrl);
   } catch (error) {
     logger.error(`googleLogin error: ${error.message}`);
@@ -41,7 +84,17 @@ const googleLogin = (req, res) => {
  */
 const googleCallback = async (req, res) => {
   try {
-    const { code, error } = req.query;
+    const { code, error, state } = req.query;
+
+    // ── CSRF state validation ────────────────────────────────────
+    // Compare the state from Google's redirect with the one we set in the cookie.
+    const savedState = req.cookies?.oauth_state;
+    if (!savedState || !state || savedState !== state) {
+      logger.warn("OAuth CSRF check failed — state mismatch");
+      return res.redirect(`${process.env.CLIENT_URL}?error=state_mismatch`);
+    }
+    // Consume the cookie immediately so it cannot be replayed
+    res.clearCookie("oauth_state");
 
     // User clicked "Deny" on Google's consent screen
     if (error || !code) {
@@ -113,21 +166,24 @@ const googleCallback = async (req, res) => {
     // Clear stale Redis token cache so fresh tokens are used immediately
     await clearTokenCache(user._id.toString());
 
-    // ── Create JWT for your app ────────────────────────────────
-    // This JWT is what the React frontend uses to authenticate API calls
-    // It is NOT a Google token — it's your own app's session token
-    const jwtToken = jwt.sign(
-      { userId: user._id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || "7d" },
-    );
+    // ── Issue app JWT ───────────────────────────────────────────
+    // This is YOUR app's session token — not a Google token.
+    const { token: jwtToken } = signJWT(user);
 
-    logger.info(`✅ User authenticated: ${user.email}`);
+    logger.info(`✅ User authenticated: userId=${user._id}`);
 
-    // ── Redirect to frontend with JWT + user info ─────────────
-    // We pass data as URL params so React can read them
+    // ── Deliver JWT via httpOnly cookie (NOT in the URL) ───────────
+    // Putting the token in a ?token=... query param is dangerous:
+    //   • It appears in server access logs (nginx / Render / Railway)
+    //   • It appears in the browser’s address bar and history
+    //   • It leaks via HTTP Referer headers to analytics / CDN
+    //
+    // An httpOnly cookie is invisible to JS, so XSS cannot steal it.
+    // SameSite=Strict prevents CSRF.
+    res.cookie("token", jwtToken, COOKIE_OPTIONS);
+
+    // Non-sensitive profile data is still fine in the query string
     const params = new URLSearchParams({
-      token: jwtToken,
       name: user.name,
       email: user.email,
       picture: user.profilePicture || "",
@@ -162,17 +218,36 @@ const getMe = async (req, res) => {
 
 /**
  * POST /api/auth/logout
- * Clears any cached tokens from Redis
- * JWT is stateless so we can't truly invalidate it,
- * but we clear server-side cache
+ *
+ * Real token invalidation:
+ * 1. Clears the token cookie so the browser won't send it again.
+ * 2. Blocklists the JWT’s jti in Redis until the token’s natural expiry.
+ *    The authMiddleware checks this blocklist on every protected request,
+ *    so the token is truly dead — not just forgotten by the client.
  */
 const logout = async (req, res) => {
   try {
     const { deleteCache } = require("../config/redis");
+
+    // Clear Google token cache
     await deleteCache(`tokens:${req.user._id}`);
-    logger.info(`✅ User logged out: ${req.user.email}`);
+
+    // Blocklist the JWT jti so it cannot be reused even if someone kept a copy
+    const { jti, exp } = req.tokenPayload || {};
+    if (jti && exp) {
+      const ttl = exp - Math.floor(Date.now() / 1000);
+      if (ttl > 0) {
+        await setCache(`blocklist:${jti}`, "1", ttl);
+      }
+    }
+
+    // Clear the cookie on the client
+    res.clearCookie("token", COOKIE_OPTIONS);
+
+    logger.info(`✅ User logged out: userId=${req.user._id}`);
     return successResponse(res, "Logged out successfully");
   } catch (error) {
+    logger.error(`logout error: ${error.message}`);
     return errorResponse(res, "Logout failed", 500);
   }
 };

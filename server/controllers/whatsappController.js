@@ -19,6 +19,7 @@ const { whatsappRateLimiter } = require("../middlewares/rateLimiter");
 const driveService = require("../services/googleDriveService");
 const { queueFileUpload } = require("../queues/driveQueue");
 const logger = require("../utils/logger");
+const { generateDownloadToken } = require("../utils/signedUrl");
 
 const handleIncoming = async (req, res) => {
   // Respond 200 immediately — Twilio times out after 5s
@@ -237,7 +238,8 @@ const executeCommand = async (
         }
 
         await sendMessage(from, `📥 Fetching and sending *${file.name}*...`);
-        const mediaUrl = `${hostUrl}/api/drive/download/${user._id}/${file.id}/${encodeURIComponent(file.name)}`;
+        const downloadToken = generateDownloadToken(user._id.toString(), file.id);
+        const mediaUrl = `${hostUrl}/api/drive/download/${user._id}/${file.id}/${encodeURIComponent(file.name)}?token=${downloadToken}`;
         logger.info(`📤 SEARCH: Sending media to ${from} | URL: ${mediaUrl}`);
         try {
           await sendMediaMessage(
@@ -395,7 +397,8 @@ const executeCommand = async (
 
       await sendMessage(from, `📥 Fetching and sending *${file.name}*...`);
 
-      const mediaUrl = `${hostUrl}/api/drive/download/${user._id}/${file.id}/${encodeURIComponent(file.name)}`;
+      const downloadToken = generateDownloadToken(user._id.toString(), file.id);
+      const mediaUrl = `${hostUrl}/api/drive/download/${user._id}/${file.id}/${encodeURIComponent(file.name)}?token=${downloadToken}`;
       logger.info(`📤 GET: Sending WhatsApp media to ${from} | URL: ${mediaUrl}`);
       
       try {

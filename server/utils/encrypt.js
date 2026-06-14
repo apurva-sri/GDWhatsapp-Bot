@@ -1,5 +1,6 @@
 // AES token encryption utilities
 const CryptoJS = require("crypto-js");
+const crypto = require("crypto");
 
 /**
  * Encryption Utility
@@ -134,16 +135,20 @@ const hashValue = (value) => {
  * Constant-time comparison of two strings.
  * Prevents timing attacks when comparing secrets.
  * Use this instead of === when comparing tokens or hashes.
+ * Does not leak length because inputs are hashed first.
  *
  * @param {string} a
  * @param {string} b
  * @returns {boolean}
  */
 const safeCompare = (a, b) => {
-  if (!a || !b || a.length !== b.length) return false;
-  const hashA = CryptoJS.SHA256(a).toString();
-  const hashB = CryptoJS.SHA256(b).toString();
-  return hashA === hashB;
+  if (!a || !b) return false;
+
+  const key = process.env.JWT_SECRET || "fallback_compare_key";
+  const hashA = crypto.createHmac("sha256", key).update(a).digest();
+  const hashB = crypto.createHmac("sha256", key).update(b).digest();
+
+  return crypto.timingSafeEqual(hashA, hashB);
 };
 
 module.exports = { encrypt, decrypt, hashValue, safeCompare };

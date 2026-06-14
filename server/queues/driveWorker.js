@@ -90,10 +90,15 @@ const startWorker = async () => {
     } catch (error) {
       logger.error(`Upload job failed for user ${userId}: ${error.message}`);
 
-      // Notify user of failure
+      // Notify user of failure with a sanitized message
+      let clientErrorMsg = "An unexpected error occurred during the upload.";
+      if (error.message && (error.message.includes("rate limit") || error.message.includes("quota") || error.message.includes("storage") || error.message.includes("size"))) {
+        clientErrorMsg = error.message;
+      }
+
       await sendMessage(
         whatsappFrom,
-        `❌ Upload failed. Please try again.\n\n_Error: ${error.message}_`,
+        `❌ Upload failed. Please try again.\n\n_Error: ${clientErrorMsg}_`,
       );
 
       if (log) await log.fail(error.message, Date.now() - start);

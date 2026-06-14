@@ -1,5 +1,9 @@
 require("dotenv").config(); // Load .env FIRST before anything else
 
+// Validate environment variables immediately at startup
+const { checkEnvVars } = require("./middlewares/requireEnvVars");
+checkEnvVars();
+
 const app = require("./app");
 const connectDB = require("./config/db");
 const { connectRedis } = require("./config/redis");

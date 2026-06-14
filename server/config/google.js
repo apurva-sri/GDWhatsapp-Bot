@@ -10,7 +10,12 @@ const createOAuth2Client = () => {
   );
 };
 
-const getAuthUrl = () => {
+/**
+ * @param {string} state - CSRF state value generated in googleLogin.
+ *                         Google echoes this back in the callback so we can
+ *                         verify the request was initiated by our server.
+ */
+const getAuthUrl = (state) => {
   const oauth2Client = createOAuth2Client();
 
   const scopes = [
@@ -22,7 +27,8 @@ const getAuthUrl = () => {
   return oauth2Client.generateAuthUrl({
     access_type: "offline", // offline → we get a refresh_token (lasts forever)
     scope: scopes,
-    prompt: "consent", // Force the consent screen each time (ensures we get refresh token)
+    prompt: "consent", // Force consent each time (ensures we get refresh token)
+    state,             // Echo'd back by Google; verified in googleCallback
   });
 };
 

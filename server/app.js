@@ -2,14 +2,15 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const cookieParser = require("cookie-parser");
 const errorHandler = require("./middlewares/errorHandler");
 const { apiRateLimiter } = require("./middlewares/rateLimiter");
 const logger = require("./utils/logger");
 
 const app = express();
 
-// Enable trust proxy to correctly resolve public protocol/host when behind ngrok or a reverse proxy
-app.set("trust proxy", true);
+// Enable trust proxy to trust exactly one hop (reverse proxy like Nginx or ngrok)
+app.set("trust proxy", 1);
 
 // ─── Security Middlewares ──────────────────────────────────────
 
@@ -34,10 +35,10 @@ app.use(
   }),
 );
 
-// ─── Request Parsing ───────────────────────────────────────────
-app.use(express.json({ limit: "10mb" })); // Parse JSON bodies
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
-// urlencoded needed for Twilio webhooks (they POST form-encoded data)
+// ─── Request Parsing & Cookies ─────────────────────────────────
+app.use(cookieParser()); // Parse cookies (needed for JWT and state tokens)
+app.use(express.json({ limit: "50kb" })); // Parse JSON bodies (restricted size to prevent DoS)
+app.use(express.urlencoded({ extended: true, limit: "100kb" })); // Parse urlencoded bodies (needed for Twilio webhooks)
 
 // ─── Logging ───────────────────────────────────────────────────
 // morgan logs every HTTP request: method, url, status, response time

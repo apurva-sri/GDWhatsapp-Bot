@@ -39,6 +39,12 @@ const whatsappRateLimiter = async (
     if (current === 1) {
       // First request in this window — set expiry
       await redis.expire(key, windowSeconds);
+    } else {
+      // Guard against permanent block if process crashed after INCR but before EXPIRE
+      const ttl = await redis.ttl(key);
+      if (ttl === -1) {
+        await redis.expire(key, windowSeconds);
+      }
     }
 
     if (current > limit) {
@@ -71,8 +77,16 @@ const apiRateLimiter = (req, res, next) => {
 
   redis
     .incr(key)
-    .then((current) => {
-      if (current === 1) redis.expire(key, 60);
+    .then(async (current) => {
+      if (current === 1) {
+        await redis.expire(key, 60);
+      } else {
+        // Guard against permanent block if process crashed after INCR but before EXPIRE
+        const ttl = await redis.ttl(key);
+        if (ttl === -1) {
+          await redis.expire(key, 60);
+        }
+      }
       if (current > 100) {
         return res.status(429).json({
           success: false,

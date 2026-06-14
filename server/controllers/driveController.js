@@ -12,6 +12,7 @@ const {
 } = require("../utils/validate");
 const asyncHandler = require("../utils/asyncHandler");
 const logger = require("../utils/logger");
+const { verifyDownloadToken } = require("../utils/signedUrl");
 
 /**
  * Drive Controller
@@ -140,8 +141,16 @@ const shareFile = asyncHandler(async (req, res) => {
 // ─── Public Download (for Twilio/WhatsApp) ──────────────────────────
 const downloadFilePublic = asyncHandler(async (req, res) => {
   const { userId, fileId } = req.params;
-  if (!userId || !fileId) {
-    return res.status(400).send("Bad Request: Missing userId or fileId");
+  const { token } = req.query;
+
+  if (!userId || !fileId || !token) {
+    return res.status(400).send("Bad Request: Missing userId, fileId, or token");
+  }
+
+  // Enforce signed token validation to prevent IDOR access to Google Drive files
+  if (!verifyDownloadToken(userId, fileId, token)) {
+    logger.warn(`⚠️ Unauthorized access attempt to file ${fileId} for user ${userId}`);
+    return res.status(403).send("Forbidden: Invalid or expired download token");
   }
 
   try {

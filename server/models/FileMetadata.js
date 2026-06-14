@@ -137,9 +137,11 @@ fileMetadataSchema.statics.cacheFiles = async function (userId, files) {
  * Used by commands like "delete report.pdf" to get the file ID
  */
 fileMetadataSchema.statics.findByName = function (userId, name) {
+  // Escape regex special characters to prevent ReDoS and ensure literal matching
+  const escapedName = name.replace(/[/\-\\^$*+?.()|[\]{}]/g, "\\$&");
   return this.findOne({
     userId,
-    name: { $regex: new RegExp(name, "i") }, // case-insensitive
+    name: { $regex: new RegExp(`^${escapedName}$`, "i") }, // case-insensitive literal exact match
   });
 };
 
