@@ -40,6 +40,8 @@ const commandLogSchema = new mongoose.Schema(
         "share",
         "info",
         "help",
+        "get",
+        "switch",
         "unknown",
       ],
       index: true, // Admin dashboard filters by command type
