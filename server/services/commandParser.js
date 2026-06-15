@@ -1,31 +1,3 @@
-// Parse WhatsApp commands
-/**
- * Command Parser Service
- *
- * Takes raw WhatsApp message text and returns a structured command object.
- *
- * WHY A SEPARATE FILE?
- * ────────────────────
- * The webhook controller shouldn't care about string parsing.
- * Keeping parsing isolated means:
- * - Easy to add new commands without touching the controller
- * - Easy to unit test parsing logic independently
- * - Clean separation of concerns
- *
- * SUPPORTED COMMANDS:
- * ─────────────────────────────────────────────────────────────
- *  list                           → list recent Drive files
- *  search <query>                 → search files by name
- *  upload                         → bot asks user to send a file
- *  delete <filename>              → delete a file (asks confirmation)
- *  share <filename> <email>       → share a file with someone
- *  info <filename>                → get file details + link
- *  help                           → show all commands
- *
- * All commands are case-insensitive.
- * Extra spaces are trimmed.
- */
-
 const COMMANDS = {
   LIST:   "list",
   SEARCH: "search",
@@ -35,23 +7,14 @@ const COMMANDS = {
   INFO:   "info",
   HELP:   "help",
   GET:    "get",
+  SWITCH: "switch",
   UNKNOWN: "unknown",
 };
 
-/**
- * Parse a raw WhatsApp message into a command object.
- *
- * @param {string} rawText - The raw message text from WhatsApp
+/* @param {string} rawText - The raw message text from WhatsApp
  * @returns {{ command: string, params: object, raw: string }}
- *
- * Examples:
- *   "list"                    → { command: "list",   params: {} }
- *   "search budget"           → { command: "search", params: { query: "budget" } }
- *   "delete Q3 Report.pdf"    → { command: "delete", params: { fileName: "Q3 Report.pdf" } }
- *   "share doc.pdf a@b.com"   → { command: "share",  params: { fileName: "doc.pdf", email: "a@b.com" } }
- *   "info notes.docx"         → { command: "info",   params: { fileName: "notes.docx" } }
- *   "hello"                   → { command: "unknown", params: {} }
- */
+*/
+
 const parseCommand = (rawText) => {
   if (!rawText || typeof rawText !== "string") {
     return { command: COMMANDS.UNKNOWN, params: {}, raw: "" };
@@ -69,6 +32,11 @@ const parseCommand = (rawText) => {
   // ── list ──────────────────────────────────────────────────────
   if (keyword === "list") {
     return { command: COMMANDS.LIST, params: {}, raw: text };
+  }
+
+  // ── switch ────────────────────────────────────────────────────
+  if (keyword === "switch") {
+    return { command: COMMANDS.SWITCH, params: {}, raw: text };
   }
 
   // ── help ──────────────────────────────────────────────────────
@@ -153,7 +121,6 @@ const parseCommand = (rawText) => {
     };
   }
 
-  // ── info <filename> ───────────────────────────────────────────
   // "info Q3 Report.pdf" → params.fileName = "Q3 Report.pdf"
   if (keyword === "info" || keyword === "details") {
     if (!rest) {
@@ -167,8 +134,6 @@ const parseCommand = (rawText) => {
     return { command: COMMANDS.INFO, params: { fileName: rest }, raw: text };
   }
 
-  // ── get/download <filename> ───────────────────────────────────
-  // "get report.pdf" → params.fileName = "report.pdf"
   if (keyword === "get" || keyword === "download" || keyword === "fetch") {
     if (!rest) {
       return {
@@ -181,17 +146,10 @@ const parseCommand = (rawText) => {
     return { command: COMMANDS.GET, params: { fileName: rest }, raw: text };
   }
 
-  // ── Unknown command ───────────────────────────────────────────
   return { command: COMMANDS.UNKNOWN, params: {}, raw: text };
 };
 
-/**
- * Check if a message is a confirmation response (YES/NO).
- * Used for delete confirmation and other two-step flows.
- *
- * @param {string} text
- * @returns {"yes" | "no" | null}
- */
+
 const parseConfirmation = (text) => {
   if (!text) return null;
   const lower = text.trim().toLowerCase();
@@ -204,10 +162,7 @@ const parseConfirmation = (text) => {
   return null;
 };
 
-/**
- * Format file size from bytes to human-readable string.
- * Used in "info" command responses.
- */
+
 const formatFileSize = (bytes) => {
   if (!bytes) return "Unknown size";
   if (bytes < 1024)        return `${bytes} B`;
@@ -215,10 +170,7 @@ const formatFileSize = (bytes) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-/**
- * Format a Drive file list into a WhatsApp-friendly string.
- * WhatsApp doesn't support markdown tables, so we use plain text.
- */
+
 const formatFileList = (files) => {
   if (!files || files.length === 0) {
     return "📂 Your Drive is empty or no files found.";
@@ -233,9 +185,7 @@ const formatFileList = (files) => {
   return `📂 *Your Drive Files*\n\n${lines.join("\n")}\n\n_Reply with a command like: delete filename.pdf_`;
 };
 
-/**
- * Map MIME type to an emoji icon for WhatsApp messages.
- */
+
 const getMimeIcon = (mimeType) => {
   if (!mimeType) return "📄";
   if (mimeType.includes("pdf"))            return "📕";

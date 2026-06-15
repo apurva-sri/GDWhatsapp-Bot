@@ -34,6 +34,7 @@ const SESSION_STATES = {
   AWAITING_FILE: "awaiting_file", // User said "upload", waiting for file
   AWAITING_DELETE_CONFIRM: "awaiting_delete_confirm", // Waiting for YES/NO
   AWAITING_SHARE_EMAIL: "awaiting_share_email", // Waiting for email address
+  AWAITING_ACCOUNT_CHOICE: "awaiting_account_choice", // Waiting for user to choose a Google account
 };
 
 const sessionSchema = new mongoose.Schema(

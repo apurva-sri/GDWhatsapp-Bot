@@ -48,14 +48,46 @@ const handleIncoming = async (req, res) => {
     }
 
     // ── Find user ───────────────────────────────────────────
-    let user = await User.findByWhatsApp(from);
+    const activeUsers = await User.find({ whatsappNumber: from, isActive: true });
 
-    if (!user) {
+    let user;
+    if (activeUsers.length === 0) {
       await sendMessage(
         from,
         `👋 Hi! To use DriveBot, please sign in first:\n\n${process.env.CLIENT_URL}\n\n_It only takes 30 seconds._`,
       );
       return;
+    } else if (activeUsers.length === 1) {
+      user = activeUsers[0];
+    } else {
+      const { getCache } = require("../config/redis");
+      const activeUserId = await getCache(`active_user:${from}`);
+
+      if (activeUserId) {
+        user = activeUsers.find((u) => u._id.toString() === activeUserId);
+      }
+
+      if (!user) {
+        const cachedSession = await getCache(`session:${from}`);
+        if (cachedSession && cachedSession.state === SESSION_STATES.AWAITING_ACCOUNT_CHOICE) {
+          user = activeUsers[0];
+        } else {
+          // Initialize account selection session
+          const tempUser = activeUsers[0];
+          const session = await getOrCreateSession(from, tempUser._id);
+          const candidateIds = activeUsers.map((u) => u._id.toString());
+          await updateSession(from, SESSION_STATES.AWAITING_ACCOUNT_CHOICE, { candidateIds }, tempUser._id);
+
+          const accountList = activeUsers
+            .map((u, i) => `${i + 1}. ${u.email}`)
+            .join("\n");
+          await sendMessage(
+            from,
+            `👥 We found multiple Google accounts linked to this phone number:\n\n${accountList}\n\n*Please reply with the number (e.g. 1 or 2) to select the account you want to use.*`
+          );
+          return;
+        }
+      }
     }
 
     // ── Re-auth check ───────────────────────────────────────
@@ -193,6 +225,30 @@ const executeCommand = async (
   }
 
   switch (command) {
+    case COMMANDS.SWITCH: {
+      logger.debug(`🔄 SWITCH command requested by: ${user._id}`);
+      const { deleteCache } = require("../config/redis");
+      await deleteCache(`active_user:${from}`);
+
+      const activeUsers = await User.find({ whatsappNumber: from, isActive: true });
+      if (activeUsers.length <= 1) {
+        const msg = `ℹ️ Only one Google account (*${user.email}*) is connected to this number. You don't have other accounts to switch to.`;
+        await sendMessage(from, msg);
+        log.responseMessage = msg;
+      } else {
+        const candidateIds = activeUsers.map((u) => u._id.toString());
+        await updateSession(from, SESSION_STATES.AWAITING_ACCOUNT_CHOICE, { candidateIds }, user._id);
+
+        const accountList = activeUsers
+          .map((u, i) => `${i + 1}. ${u.email}`)
+          .join("\n");
+        const msg = `👥 Please choose the account you want to switch to:\n\n${accountList}\n\n*Reply with the number (e.g. 1 or 2).*`;
+        await sendMessage(from, msg);
+        log.responseMessage = msg;
+      }
+      break;
+    }
+
     case COMMANDS.HELP: {
       logger.debug(`📚 HELP command requested by: ${user._id}`);
       const msg = MESSAGES.HELP();
@@ -454,6 +510,35 @@ const handleSessionContinuation = async (
   }
 
   switch (session.state) {
+    case SESSION_STATES.AWAITING_ACCOUNT_CHOICE: {
+      logger.debug(`👥 Awaiting account choice: User=${user._id} | Input="${rawText}"`);
+      const candidateIds = session.context?.candidateIds || [];
+      const choiceIndex = parseInt(rawText.trim()) - 1;
+
+      if (!isNaN(choiceIndex) && choiceIndex >= 0 && choiceIndex < candidateIds.length) {
+        const selectedUserId = candidateIds[choiceIndex];
+        const selectedUser = await User.findById(selectedUserId);
+
+        if (selectedUser) {
+          const { setCache } = require("../config/redis");
+          await setCache(`active_user:${from}`, selectedUserId, 2 * 60 * 60);
+          await updateSession(from, SESSION_STATES.IDLE, {}, selectedUserId);
+
+          await sendMessage(
+            from,
+            `✅ Connected to *${selectedUser.email}*. You can now use Google Drive commands!\n\n_Type *switch* at any time to switch accounts._`
+          );
+          return;
+        }
+      }
+
+      await sendMessage(
+        from,
+        `❌ Invalid selection. Please reply with a number between 1 and ${candidateIds.length}, or type *cancel*.`
+      );
+      break;
+    }
+
     case SESSION_STATES.AWAITING_FILE: {
       logger.debug(`📎 Awaiting file: User=${user._id} | Media=${numMedia}`);
       if (numMedia && parseInt(numMedia) > 0 && mediaUrl) {

@@ -77,15 +77,21 @@ const getOrCreateSession = async (whatsappNumber, userId) => {
  * @param {string} newState - One of SESSION_STATES values
  * @param {object} context  - Data needed to complete the multi-step command
  */
-const updateSession = async (whatsappNumber, newState, context = {}) => {
+const updateSession = async (whatsappNumber, newState, context = {}, newUserId = null) => {
+  const updateData = {
+    state: newState,
+    context,
+    lastActivityAt: new Date(),
+  };
+
+  if (newUserId) {
+    updateData.userId = newUserId;
+  }
+
   // Write to MongoDB (persistent)
   const session = await Session.findOneAndUpdate(
     { whatsappNumber },
-    {
-      state: newState,
-      context,
-      lastActivityAt: new Date(),
-    },
+    updateData,
     { returnDocument: 'after' },
   );
 
