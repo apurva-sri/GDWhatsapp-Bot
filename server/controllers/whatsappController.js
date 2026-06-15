@@ -47,6 +47,43 @@ const handleIncoming = async (req, res) => {
       return;
     }
 
+    // ── Check if message is a linking code ──────────────────
+    const connectRegex = /^connect\s+([a-f0-9]{6})$/i;
+    const connectMatch = rawText.match(connectRegex);
+    if (connectMatch) {
+      const code = connectMatch[1].toLowerCase();
+      const { getCache, deleteCache, setCache } = require("../config/redis");
+      const userId = await getCache(`link_code:${code}`);
+
+      if (userId) {
+        const linkedUser = await User.findById(userId);
+        if (linkedUser && linkedUser.isActive) {
+          // Link this user with the WhatsApp number
+          await User.findByIdAndUpdate(userId, {
+            whatsappNumber: from,
+            whatsappLinkedAt: linkedUser.whatsappLinkedAt || new Date(),
+          });
+
+          await deleteCache(`link_code:${code}`);
+          
+          // Set this user as active for this WhatsApp number in Redis cache
+          await setCache(`active_user:${from}`, userId, 2 * 60 * 60);
+
+          await sendMessage(
+            from,
+            `🎉 *Success!* Your WhatsApp number has been linked to your account: *${linkedUser.email}*.\n\nType *list* or *help* to get started!`
+          );
+          return;
+        }
+      } else {
+        await sendMessage(
+          from,
+          `❌ Invalid or expired linking code. Please check the code on the website and try again.`
+        );
+        return;
+      }
+    }
+
     // ── Find user ───────────────────────────────────────────
     const activeUsers = await User.find({ whatsappNumber: from, isActive: true });
 

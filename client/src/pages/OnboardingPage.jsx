@@ -1,37 +1,30 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../context/authContext";
+import { generateLinkCode } from "../utils/api";
 import "./OnboardingPage.css";
-
-const STEPS = [
-  {
-    id: "connected",
-    icon: "✅",
-    title: "Google Drive connected",
-    desc: "Your account is linked and ready.",
-  },
-  {
-    id: "save-number",
-    icon: "📱",
-    title: "Save the WhatsApp number",
-    desc: (num) => `Add this number to your contacts:\n${num}`,
-    action: true,
-  },
-  {
-    id: "send-hi",
-    icon: "👋",
-    title: 'Send "hi" on WhatsApp',
-    desc: "Start a chat — DriveBot will greet you and walk you through commands.",
-  },
-];
 
 export default function OnboardingPage() {
   const [searchParams] = useSearchParams();
-  const { saveAuth, isAuthenticated } = useAuth();
+  const { saveAuth, isAuthenticated, token: contextToken, user: contextUser } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0); // 0 = loading, 1-3 = steps, 4 = done
   const [error, setError] = useState(null);
   const [userData, setUserData] = useState(null);
+  const [linkCode, setLinkCode] = useState("");
+  const [generatingCode, setGeneratingCode] = useState(false);
+
+  const fetchLinkCode = async (tokenVal) => {
+    setGeneratingCode(true);
+    try {
+      const res = await generateLinkCode(tokenVal);
+      setLinkCode(res.data?.code || "");
+    } catch (err) {
+      console.error("Failed to generate link code", err);
+    } finally {
+      setGeneratingCode(false);
+    }
+  };
 
   // ── Parse JWT from URL on mount ──────────────────────────────
   useEffect(() => {
@@ -41,38 +34,51 @@ export default function OnboardingPage() {
     const picture = searchParams.get("picture");
     const whatsapp = searchParams.get("whatsapp");
 
-    if (!token) {
+    let activeToken = token || contextToken;
+    let activeUser = null;
+
+    if (!activeToken) {
       const err = searchParams.get("error");
       if (err === "access_denied") {
         setError("You cancelled the Google sign-in. Please try again.");
+        return;
       } else if (err === "no_refresh_token") {
         setError("Session issue with Google. Please sign in again.");
-      } else if (isAuthenticated) {
-        // Already logged in — skip straight to steps
-        setStep(1);
         return;
+      } else if (isAuthenticated) {
+        activeUser = contextUser;
       } else {
         navigate("/login", { replace: true });
         return;
       }
-      return;
+    } else {
+      if (token) {
+        activeUser = { name, email, picture, whatsapp };
+        saveAuth(token, activeUser);
+      } else {
+        activeUser = contextUser;
+      }
     }
 
-    const user = { name, email, picture, whatsapp };
-    saveAuth(token, user);
-    setUserData(user);
+    setUserData(activeUser);
+
+    if (activeToken) {
+      fetchLinkCode(activeToken);
+    }
 
     // Clean up sensitive token and query parameters from the browser address bar
     window.history.replaceState(null, "", window.location.pathname);
 
     // Animate through loading → step 1
     setTimeout(() => setStep(1), 800);
-  }, []);
+  }, [searchParams, isAuthenticated, contextToken, contextUser]);
 
   const handleGoToDashboard = () => navigate("/dashboard", { replace: true });
   const handleOpenWhatsApp = () => {
-    const num = userData?.whatsapp?.replace("whatsapp:", "");
-    if (num) window.open(`https://wa.me/${num.replace("+", "")}`, "_blank");
+    const num = userData?.whatsapp?.replace("whatsapp:", "") || "+14155238886";
+    const cleanNum = num.replace(/[^0-9+]/g, ""); // Keep only digits and '+'
+    const text = encodeURIComponent(`connect ${linkCode}`);
+    window.open(`https://wa.me/${cleanNum.replace("+", "")}?text=${text}`, "_blank");
   };
 
   if (error)
@@ -105,6 +111,40 @@ export default function OnboardingPage() {
       </div>
     );
 
+  const stepsData = [
+    {
+      id: "connected",
+      icon: "✅",
+      title: "Google Drive connected",
+      desc: () => "Your account is linked and ready.",
+    },
+    {
+      id: "save-number",
+      icon: "📱",
+      title: "Save the WhatsApp number",
+      desc: (num) => `Add this number to your contacts:\n${num}`,
+    },
+    {
+      id: "send-code",
+      icon: "🔗",
+      title: "Link your WhatsApp number",
+      desc: () => (
+        <div>
+          Send the prefilled code to connect your account:
+          <br />
+          {linkCode ? (
+            <div className="ob-code-display">
+              Send message: <strong className="ob-highlight-code">connect {linkCode}</strong>
+            </div>
+          ) : (
+            <div className="ob-code-display">Generating code...</div>
+          )}
+        </div>
+      ),
+      action: true,
+    },
+  ];
+
   return (
     <div className="onboarding-page">
       <OrbBg />
@@ -135,7 +175,7 @@ export default function OnboardingPage() {
 
         {/* Steps */}
         <div className="ob-steps">
-          {STEPS.map((s, i) => (
+          {stepsData.map((s, i) => (
             <div
               key={s.id}
               className={`ob-step ${step > i ? "ob-step-done" : ""} ${step === i + 1 ? "ob-step-active" : ""}`}
@@ -157,12 +197,13 @@ export default function OnboardingPage() {
                   <button
                     className="ob-btn ob-btn-wa"
                     onClick={handleOpenWhatsApp}
+                    disabled={generatingCode || !linkCode}
                   >
-                    <WAIcon /> Open WhatsApp
+                    <WAIcon /> {generatingCode ? "Generating code..." : "Link WhatsApp"}
                   </button>
                 )}
               </div>
-              {i < STEPS.length - 1 && <div className="ob-step-connector" />}
+              {i < stepsData.length - 1 && <div className="ob-step-connector" />}
             </div>
           ))}
         </div>

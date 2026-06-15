@@ -1,5 +1,3 @@
-// In production, VITE_API_BASE_URL points to Railway backend
-// In development, Vite proxy handles /api → localhost:5000
 const BASE = import.meta.env.VITE_API_BASE_URL
   ? `${import.meta.env.VITE_API_BASE_URL}/api`
   : "/api";
@@ -35,6 +33,7 @@ export const shareFile = (token, fileId, body) =>
   api.post(`/drive/files/${fileId}/share`, body, token);
 export const logout = (token) => api.post("/auth/logout", {}, token);
 export const deactivateAcc = (token) => api.delete("/user/account", token);
+export const generateLinkCode = (token) => api.post("/user/link-code", {}, token);
 
 // Google OAuth — redirects to backend which redirects to Google
 export const startGoogleOAuth = () => {

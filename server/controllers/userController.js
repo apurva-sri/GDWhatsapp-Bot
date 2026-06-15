@@ -5,7 +5,8 @@ const {
   successResponse,
   errorResponse,
 } = require("../utils/responseFormatter");
-const { deleteCache } = require("../config/redis");
+const crypto = require("crypto");
+const { deleteCache, setCache } = require("../config/redis");
 const logger = require("../utils/logger");
 
 /**
@@ -141,4 +142,24 @@ const deactivateAccount = async (req, res, next) => {
   }
 };
 
-module.exports = { getProfile, getStats, getHistory, deactivateAccount };
+/**
+ * POST /api/user/link-code
+ * Generates a temporary WhatsApp linking code for the user
+ */
+const generateLinkCode = async (req, res, next) => {
+  try {
+    logger.info(`🔑 Generating linking code for UserId=${req.user._id}`);
+    const code = crypto.randomBytes(3).toString("hex").toLowerCase();
+    
+    // Store in Redis mapping code -> userId for 15 minutes (900 seconds)
+    await setCache(`link_code:${code}`, req.user._id.toString(), 900);
+    
+    logger.info(`✅ Linking code generated: code=${code} | UserId=${req.user._id}`);
+    return successResponse(res, "Linking code generated", { code });
+  } catch (error) {
+    logger.error(`❌ Error generating linking code: UserId=${req.user._id} | Error=${error.message}`);
+    next(error);
+  }
+};
+
+module.exports = { getProfile, getStats, getHistory, deactivateAccount, generateLinkCode };

@@ -14,21 +14,7 @@ const asyncHandler = require("../utils/asyncHandler");
 const logger = require("../utils/logger");
 const { verifyDownloadToken } = require("../utils/signedUrl");
 
-/**
- * Drive Controller
- *
- * Fix Issue 5: tokenError check now on ALL routes (was only on listFiles).
- * Fix Issue 5: req.accessToken passed to every driveService call
- *              so tokens are never fetched twice per request.
- *
- * All routes protected by: authMiddleware → tokenRefresher → controller
- * req.user        → set by authMiddleware
- * req.accessToken → set by tokenRefresher (valid, auto-refreshed token)
- * req.tokenError  → set by tokenRefresher if Google refresh failed
- */
 
-// ─── Shared token guard ───────────────────────────────────────────
-// DRY helper — used at top of every handler that calls Drive API
 const guardToken = (req, res) => {
   if (req.tokenError === "TOKEN_REFRESH_FAILED") {
     errorResponse(
@@ -138,7 +124,7 @@ const shareFile = asyncHandler(async (req, res) => {
   return successResponse(res, `File shared with ${email} as ${role}`);
 });
 
-// ─── Public Download (for Twilio/WhatsApp) ──────────────────────────
+
 const downloadFilePublic = asyncHandler(async (req, res) => {
   const { userId, fileId } = req.params;
   const { token } = req.query;

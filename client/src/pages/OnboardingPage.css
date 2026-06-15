@@ -301,3 +301,23 @@
   .onboarding-card { padding: 32px 22px; }
   .ob-commands-grid { grid-template-columns: 1fr; }
 }
+
+.ob-code-display {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin-top: 8px;
+  font-family: var(--font-body);
+  color: rgba(255, 255, 255, 0.7);
+  display: inline-block;
+}
+
+.ob-highlight-code {
+  color: var(--accent-2);
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  background: rgba(91, 79, 255, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+}

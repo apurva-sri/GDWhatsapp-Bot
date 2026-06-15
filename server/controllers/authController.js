@@ -89,17 +89,10 @@ const googleCallback = async (req, res) => {
       return res.redirect(`${process.env.CLIENT_URL}?error=access_denied`);
     }
 
-    // ── Exchange code for tokens ───────────────────────────────
-    // This is the key step — Google gives us:
-    // access_token  → valid for 1 hour, used to call Drive API
-    // refresh_token → valid forever (until revoked), used to get new access tokens
-    // expiry_date   → timestamp when access_token expires
     const tokens = await getTokensFromCode(code);
     const { access_token, refresh_token, expiry_date, scope } = tokens;
 
     if (!refresh_token) {
-      // This happens if the user already authorized before and we didn't force consent
-      // The google.js config has prompt: "consent" to prevent this, but just in case:
       logger.error("No refresh token received from Google");
       return res.redirect(`${process.env.CLIENT_URL}?error=no_refresh_token`);
     }
@@ -153,20 +146,11 @@ const googleCallback = async (req, res) => {
     // Clear stale Redis token cache so fresh tokens are used immediately
     await clearTokenCache(user._id.toString());
 
-    // ── Issue app JWT ───────────────────────────────────────────
-    // This is YOUR app's session token — not a Google token.
     const { token: jwtToken } = signJWT(user);
 
     logger.info(`✅ User authenticated: userId=${user._id}`);
 
     // ── Deliver JWT via httpOnly cookie (NOT in the URL) ───────────
-    // Putting the token in a ?token=... query param is dangerous:
-    //   • It appears in server access logs (nginx / Render / Railway)
-    //   • It appears in the browser’s address bar and history
-    //   • It leaks via HTTP Referer headers to analytics / CDN
-    //
-    // An httpOnly cookie is invisible to JS, so XSS cannot steal it.
-    // SameSite=Strict prevents CSRF.
     res.cookie("token", jwtToken, COOKIE_OPTIONS);
 
     // Non-sensitive profile data is still fine in the query string
@@ -187,14 +171,8 @@ const googleCallback = async (req, res) => {
   }
 };
 
-/**
- * GET /api/auth/me
- * Returns the currently logged-in user's profile
- * Protected route — requires JWT in Authorization header
- */
 const getMe = async (req, res) => {
   try {
-    // req.user is set by authMiddleware
     const user = await User.findById(req.user._id).select("-tokens");
     if (!user) return errorResponse(res, "User not found", 404);
     return successResponse(res, "User profile", user);
@@ -204,15 +182,6 @@ const getMe = async (req, res) => {
   }
 };
 
-/**
- * POST /api/auth/logout
- *
- * Real token invalidation:
- * 1. Clears the token cookie so the browser won't send it again.
- * 2. Blocklists the JWT’s jti in Redis until the token’s natural expiry.
- *    The authMiddleware checks this blocklist on every protected request,
- *    so the token is truly dead — not just forgotten by the client.
- */
 const logout = async (req, res) => {
   try {
     const { deleteCache } = require("../config/redis");
