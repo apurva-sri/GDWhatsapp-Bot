@@ -86,7 +86,7 @@ const updateSession = async (whatsappNumber, newState, context = {}) => {
       context,
       lastActivityAt: new Date(),
     },
-    { new: true },
+    { returnDocument: 'after' },
   );
 
   if (!session) {

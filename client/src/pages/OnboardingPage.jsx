@@ -62,6 +62,9 @@ export default function OnboardingPage() {
     saveAuth(token, user);
     setUserData(user);
 
+    // Clean up sensitive token and query parameters from the browser address bar
+    window.history.replaceState(null, "", window.location.pathname);
+
     // Animate through loading → step 1
     setTimeout(() => setStep(1), 800);
   }, []);
@@ -72,7 +75,6 @@ export default function OnboardingPage() {
     if (num) window.open(`https://wa.me/${num.replace("+", "")}`, "_blank");
   };
 
-  // ── Error state ──────────────────────────────────────────────
   if (error)
     return (
       <div className="onboarding-page">

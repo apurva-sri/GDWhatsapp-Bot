@@ -5,17 +5,7 @@ const { errorResponse } = require("../utils/responseFormatter");
 const { getCache } = require("../config/redis");
 const logger = require("../utils/logger");
 
-/**
- * Extract JWT exclusively from the Authorization header.
- *
- * SECURITY: query-param JWTs (?token=...) are intentionally NOT supported.
- * They appear in:
- *   - Server access logs (nginx, morgan, Render, Railway)
- *   - Browser history
- *   - HTTP Referer headers sent to third-party scripts
- *   - Proxy / CDN logs
- * Always use: Authorization: Bearer <token>
- */
+
 const extractToken = (req) => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -24,11 +14,6 @@ const extractToken = (req) => {
   return null;
 };
 
-/**
- * Check whether a JWT jti (JWT ID) has been revoked (placed in the blocklist
- * during logout). Falls back to allowing the token when Redis is unavailable
- * to avoid blocking all users during a Redis outage.
- */
 const isTokenRevoked = async (jti) => {
   if (!jti) return false;
   try {

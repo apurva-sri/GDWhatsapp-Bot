@@ -16,12 +16,7 @@ const logger = require("../utils/logger");
 const { clearTokenCache } = require("../services/tokenService");
 const { setCache } = require("../config/redis");
 
-// ── JWT helper ───────────────────────────────────────────────
-/**
- * Issue a JWT for the user with a unique jti (JWT ID).
- * The jti allows us to revoke individual tokens at logout via a Redis blocklist.
- * Algorithm is pinned to HS256 (same algo enforced in authMiddleware).
- */
+
 const signJWT = (user) => {
   const jti = crypto.randomUUID(); // unique per token — used by blocklist
   const token = jwt.sign(
@@ -34,21 +29,13 @@ const signJWT = (user) => {
   );
   return { token, jti };
 };
-
-// Cookie security settings
 const COOKIE_OPTIONS = {
   httpOnly: true,  // JS cannot read this cookie (blocks XSS token theft)
   secure: process.env.NODE_ENV === "production", // HTTPS only in prod
   sameSite: "strict",                          // CSRF protection
   maxAge: 7 * 24 * 60 * 60 * 1000,            // 7 days in ms
 };
-/**
- * STEP 1 — Redirect user to Google's consent screen
- *
- * When frontend hits GET /api/auth/google,
- * we generate the Google OAuth URL and redirect the user there.
- * Google will show: "DriveBot wants to access your Drive. Allow?"
- */
+
 const googleLogin = (req, res) => {
   try {
     // Generate a cryptographically random state value to defend against CSRF.
@@ -61,7 +48,7 @@ const googleLogin = (req, res) => {
     res.cookie("oauth_state", state, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax", // lax because the Google redirect will cross origins
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // lax in dev, none in prod for cross-domain on Render
       maxAge: 10 * 60 * 1000, // 10 minutes — OAuth must complete within this
     });
 
@@ -149,7 +136,7 @@ const googleCallback = async (req, res) => {
       },
       {
         upsert: true, // Create if doesn't exist
-        new: true, // Return the updated document
+        returnDocument: 'after', // Return the updated document (new option)
         setDefaultsOnInsert: true,
       },
     );
@@ -184,6 +171,7 @@ const googleCallback = async (req, res) => {
 
     // Non-sensitive profile data is still fine in the query string
     const params = new URLSearchParams({
+      token: jwtToken,
       name: user.name,
       email: user.email,
       picture: user.profilePicture || "",
